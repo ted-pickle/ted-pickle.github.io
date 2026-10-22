@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>비트 뒤집기</title>
+<meta name="description" content="칸을 누르면 그 칸과 상하좌우 비트가 뒤집히는 퍼즐. 모든 비트를 1로 만들면 성공">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<style>
+  :root { --bg: #0f1a17; --panel: #15241f; --ink: #e7f2ec; --muted: #8aa79a; --line: #23392f; --on: #ffd25e; --trace: #2f5a48; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: radial-gradient(1200px 700px at 30% 0%, #16302a, var(--bg)); color: var(--ink); font-family: "Pretendard Variable", Pretendard, system-ui, sans-serif; word-break: keep-all; }
+  a { color: inherit; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 24px 60px; }
+  .top a { font-size: 14px; color: var(--muted); text-decoration: none; }
+  h1 { margin: 18px 0 6px; font-size: 34px; letter-spacing: -.03em; }
+  .sub { margin: 0 0 24px; color: var(--muted); }
+  .layout { display: grid; grid-template-columns: 1fr 320px; gap: 26px; align-items: start; }
+  .board { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 28px; display: flex; justify-content: center;
+    background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px); background-size: 24px 24px; background-position: center; }
+  .gridwrap { display: flex; gap: 18px; align-items: stretch; }
+  .grid { display: grid; gap: 8px; }
+  .cell { position: relative; width: 58px; height: 58px; border-radius: 12px; border: 0; padding: 0; cursor: pointer; font: inherit;
+    background: #1d2f28; box-shadow: inset 0 0 0 2px var(--trace); color: #557a69; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 15px; font-weight: 700;
+    transition: background .25s, box-shadow .25s, color .25s, transform .12s; }
+  .cell:hover { transform: translateY(-2px); }
+  .cell:active { transform: scale(.94); }
+  .cell.on { background: radial-gradient(circle at 50% 40%, #fff3c4, var(--on) 55%, #f0a92c); color: #6b4a0a; box-shadow: 0 0 22px rgba(255,210,94,.55), inset 0 0 0 2px #ffe59a; }
+  .cell.flip { animation: flip .3s ease; }
+  @keyframes flip { 50% { transform: rotateY(90deg); } }
+  .cell.hint::after { content: ""; position: absolute; inset: -6px; border-radius: 16px; border: 2px dashed #7fd4ff; animation: spin 2.4s linear infinite; }
+  @keyframes spin { 50% { opacity: .3; } }
+  .gap { width: 58px; height: 58px; }
+  .bits.hide .cell { color: transparent; }
+  .rows { display: grid; gap: 8px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; color: var(--muted); }
+  .rows div { height: 58px; display: flex; flex-direction: column; justify-content: center; white-space: nowrap; }
+  .rows b { color: var(--ink); font-size: 14px; letter-spacing: 1px; }
+  .board.win .cell.on { animation: glow 1s ease infinite alternate; }
+  @keyframes glow { to { box-shadow: 0 0 34px rgba(255,210,94,.9), inset 0 0 0 2px #fff3c4; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+  .panel + .panel { margin-top: 14px; }
+  .lv { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+  .lvname { font-size: 24px; font-weight: 800; margin: 6px 0 12px; }
+  .stat { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align: center; }
+  .stat div { background: #1b2d26; border-radius: 10px; padding: 10px 4px; font-size: 12px; color: var(--muted); }
+  .stat b { display: block; font-size: 20px; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .btn { border: 1px solid var(--line); background: #1b2d26; color: var(--ink); border-radius: 10px; padding: 11px; font: inherit; font-size: 14px; cursor: pointer; }
+  .btn.main { grid-column: span 2; background: var(--on); color: #4a3406; border: 0; font-weight: 800; }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .msg { margin-top: 12px; min-height: 40px; font-size: 14px; line-height: 1.6; }
+  .note h3 { margin: 0 0 8px; font-size: 15px; }
+  .note p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.7; color: var(--muted); }
+  .note b { color: var(--ink); }
+  .note code { color: var(--on); }
+  label.tg { display: flex; gap: 8px; align-items: center; margin-top: 10px; font-size: 13px; color: var(--muted); cursor: pointer; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } .cell, .gap, .rows div { width: 40px; height: 40px; } .rows div { width: auto; } .board { padding: 16px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="../">← 포트폴리오로</a></div>
+  <h1>비트 뒤집기</h1>
+  <p class="sub">칸을 누르면 그 칸과 위아래, 양옆 칸의 비트가 뒤집힙니다. 모든 비트를 1로 켜면 성공입니다.</p>
+  <div class="layout">
+    <div class="board" id="board"><div class="gridwrap"><div class="grid bits" id="grid"></div><div class="rows" id="rows"></div></div></div>
+    <div>
+      <div class="panel">
+        <div class="lv"><span id="lvtxt"></span><span id="lvdots"></span></div>
+        <div class="lvname" id="lvname"></div>
+        <div class="stat"><div><b id="moves">0</b>누른 횟수</div><div><b id="par">0</b>목표</div><div><b id="lit">0</b>켜진 비트</div></div>
+        <div class="btns">
+          <button class="btn" id="hint">힌트</button><button class="btn" id="retry">다시 섞기</button>
+          <button class="btn main" id="next" disabled>다음 모양 →</button>
+        </div>
+        <div class="msg" id="msg"></div>
+        <label class="tg"><input type="checkbox" id="showbits" checked> 칸 안에 비트(0, 1) 보이기</label>
+      </div>
+      <div class="panel note">
+        <h3>정보 시간에 배운 것</h3>
+        <p>칸 하나는 <b>비트</b> 하나입니다. 꺼짐은 <code>0</code>, 켜짐은 <code>1</code>입니다. 오른쪽 숫자는 각 줄의 비트를 <b>이진수</b>로 읽고 십진수로 바꾼 값입니다.</p>
+        <p>칸을 누르는 것은 그 비트에 1을 <b>XOR</b> 하는 것과 같습니다. 그래서 같은 칸을 두 번 누르면 원래대로 돌아오고, 누르는 순서는 결과에 영향을 주지 않습니다.</p>
+        <p>힌트는 모든 칸을 연립방정식으로 놓고 컴퓨터가 풀어서 찾습니다.</p>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const LEVELS = [
+  { name: '더하기', k: 2, map: ['.#.', '###', '.#.'] },
+  { name: '정사각형', k: 3, map: ['###', '###', '###'] },
+  { name: '다이아몬드', k: 4, map: ['..#..', '.###.', '#####', '.###.', '..#..'] },
+  { name: '고리', k: 5, map: ['#####', '##.##', '#...#', '##.##', '#####'] },
+  { name: '하트', k: 6, map: ['.##.##.', '#######', '#######', '.#####.', '..###..', '...#...'] },
+  { name: '화살표', k: 6, map: ['...#...', '..###..', '.#####.', '#######', '..###..', '..###..'] },
+  { name: '1바이트 × 4', k: 8, map: ['########', '########', '########', '########'] }
+];
+const $ = id => document.getElementById(id);
+let lv = 0, cells = [], state = [], moves = 0, par = 0, won = false, rows = 0, cols = 0;
+
+function setup() {
+  const L = LEVELS[lv];
+  rows = L.map.length; cols = L.map[0].length;
+  cells = [];
+  L.map.forEach((line, r) => [...line].forEach((ch, c) => { if (ch === '#') cells.push({ r, c }); }));
+  // 이웃 목록
+  const idx = new Map(cells.map((p, i) => [p.r + ',' + p.c, i]));
+  cells.forEach(p => {
+    p.nb = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].map(([dr, dc]) => idx.get((p.r + dr) + ',' + (p.c + dc))).filter(v => v !== undefined);
+  });
+  scramble();
+}
+function scramble() {
+  const L = LEVELS[lv];
+  let order;
+  do {
+    state = cells.map(() => 1);
+    order = cells.map((_, i) => i).sort(() => Math.random() - .5).slice(0, Math.min(L.k, cells.length));
+    order.forEach(i => press(i, false));
+  } while (state.every(v => v));
+  moves = 0; won = false;
+  par = Math.min(order.length, solve().reduce((a, b) => a + b, 0));
+  $('next').disabled = true;
+  $('msg').textContent = '';
+  $('board').classList.remove('win');
+  build();
+}
+function press(i, user = true) {
+  cells[i].nb.forEach(j => state[j] ^= 1);    // XOR 1 = 뒤집기
+  if (user) {
+    moves++;
+    cells[i].nb.forEach(j => { const b = cells[j].el; b.classList.remove('flip'); b.offsetWidth; b.classList.add('flip'); });
+    document.querySelectorAll('.cell.hint').forEach(b => b.classList.remove('hint'));
+    render();
+    if (state.every(v => v)) win();
+  }
+}
+// GF(2) 가우스 소거: A x = b (b = 꺼진 칸)
+function solve() {
+  const n = cells.length;
+  const M = cells.map((p, i) => { const row = new Uint8Array(n + 1); cells.forEach((q, j) => { if (q.nb.includes(i)) row[j] = 1; }); row[n] = state[i] ? 0 : 1; return row; });
+  const where = new Array(n).fill(-1);
+  let r = 0;
+  for (let c = 0; c < n && r < n; c++) {
+    let piv = -1;
+    for (let i = r; i < n; i++) if (M[i][c]) { piv = i; break; }
+    if (piv < 0) continue;
+    [M[r], M[piv]] = [M[piv], M[r]];
+    for (let i = 0; i < n; i++) if (i !== r && M[i][c]) for (let k = c; k <= n; k++) M[i][k] ^= M[r][k];
+    where[c] = r; r++;
+  }
+  return where.map(w => w < 0 ? 0 : M[w][n]);
+}
+function build() {
+  const g = $('grid');
+  g.style.gridTemplateColumns = `repeat(${cols}, auto)`;
+  g.innerHTML = '';
+  const map = LEVELS[lv].map;
+  let k = 0;
+  map.forEach(line => [...line].forEach(ch => {
+    if (ch === '#') {
+      const i = k++;
+      const b = document.createElement('button');
+      b.className = 'cell';
+      b.onclick = () => { if (!won) press(i); };
+      cells[i].el = b;
+      g.appendChild(b);
+    } else g.insertAdjacentHTML('beforeend', '<div class="gap"></div>');
+  }));
+  $('lvtxt').textContent = `${lv + 1} / ${LEVELS.length} 단계`;
+  $('lvname').textContent = LEVELS[lv].name;
+  $('lvdots').textContent = LEVELS.map((_, i) => i <= lv ? '●' : '○').join(' ');
+  render();
+}
+function render() {
+  cells.forEach((p, i) => { p.el.classList.toggle('on', !!state[i]); p.el.textContent = state[i]; });
+  // 줄마다 이진수 읽기
+  const out = [];
+  for (let r = 0; r < rows; r++) {
+    const bits = cells.map((p, i) => p.r === r ? state[i] : null).filter(v => v !== null).join('');
+    out.push(`<div><b>${bits}</b>= ${parseInt(bits, 2)}</div>`);
+  }
+  $('rows').innerHTML = out.join('');
+  $('moves').textContent = moves; $('par').textContent = par;
+  $('lit').textContent = `${state.filter(v => v).length}/${state.length}`;
+}
+function win() {
+  won = true;
+  $('board').classList.add('win');
+  const allOnes = '1'.repeat(cols);
+  $('msg').innerHTML = `<b>성공!</b> ${moves}번 만에 모든 비트를 켰습니다. ${moves <= par ? '목표 횟수 달성!' : `목표는 ${par}번이었습니다.`}`;
+  $('next').disabled = false;
+  $('next').textContent = lv === LEVELS.length - 1 ? '처음 모양부터 다시' : '다음 모양 →';
+}
+$('hint').onclick = () => {
+  if (won) return;
+  const x = solve();
+  const i = x.findIndex(v => v);
+  if (i >= 0) { cells[i].el.classList.add('hint'); $('msg').textContent = `점선 칸을 눌러 봅니다. 앞으로 ${x.reduce((a, b) => a + b, 0)}번이면 끝낼 수 있습니다.`; }
+};
+$('retry').onclick = scramble;
+$('next').onclick = () => { lv = (lv + 1) % LEVELS.length; setup(); };
+$('showbits').onchange = e => $('grid').classList.toggle('hide', !e.target.checked);
+setup();
+</script>
+</body>
+</html>

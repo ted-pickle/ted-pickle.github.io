@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>연표 정렬 게임</title>
+<meta name="description" content="한국사 사건 카드를 일어난 순서대로 정렬하는 게임">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<style>
+  :root { --bg: #f6f1e7; --paper: #fffdf8; --ink: #33291f; --muted: #8a7b68; --line: #e4d8c4; --ok: #2e8b57; --no: #c2483a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Pretendard Variable", Pretendard, system-ui, sans-serif; word-break: keep-all; }
+  a { color: inherit; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 28px 24px 60px; }
+  .top a { font-size: 14px; color: var(--muted); text-decoration: none; }
+  h1 { margin: 18px 0 6px; font-size: 34px; letter-spacing: -.03em; font-family: "Pretendard Variable", serif; }
+  .sub { margin: 0 0 24px; color: var(--muted); }
+  .layout { display: grid; grid-template-columns: 1fr 280px; gap: 26px; align-items: start; }
+  .board { position: relative; display: grid; grid-template-columns: 54px 1fr; }
+  .axis { position: relative; }
+  .axis::before { content: ""; position: absolute; left: 50%; top: 22px; bottom: 22px; width: 2px; margin-left: -1px; background: linear-gradient(var(--line), var(--ink)); }
+  .axis span { position: absolute; left: 0; right: 0; text-align: center; font-size: 12px; color: var(--muted); background: var(--bg); }
+  .axis .old { top: 0; } .axis .new { bottom: 0; }
+  .list { display: flex; flex-direction: column; gap: 10px; padding: 26px 0; touch-action: none; }
+  .ev {
+    position: relative; display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 12px;
+    background: var(--paper); border: 1px solid var(--line); border-left: 5px solid var(--era, var(--line)); border-radius: 12px; padding: 14px 16px;
+    cursor: grab; user-select: none; box-shadow: 0 2px 0 rgba(80,60,30,.05); transition: box-shadow .2s, border-color .3s, background .3s;
+  }
+  .ev.drag { cursor: grabbing; z-index: 5; box-shadow: 0 18px 40px -16px rgba(80,60,30,.45); background: #fff; }
+  .ev .grip { color: #c3b49c; font-size: 18px; line-height: 1; letter-spacing: -2px; }
+  .ev h3 { margin: 0; font-size: 17px; }
+  .ev p { margin: 3px 0 0; font-size: 13.5px; color: var(--muted); }
+  .ev .yr { font-weight: 800; font-size: 15px; opacity: 0; transform: translateX(8px); transition: .4s; white-space: nowrap; text-align: right; }
+  .ev .yr small { display: block; font-weight: 500; font-size: 11.5px; color: var(--muted); }
+  .done .ev { cursor: default; }
+  .done .ev .yr { opacity: 1; transform: none; }
+  .ev.ok { border-color: #bfe0cc; border-left-color: var(--era); } .ev.no { border-color: #efc4bd; border-left-color: var(--era); }
+  .ev .mark { position: absolute; right: -12px; top: -10px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 13px; font-weight: 800; transform: scale(0); transition: transform .35s cubic-bezier(.3,1.6,.5,1); }
+  .ev.ok .mark { background: var(--ok); transform: scale(1); } .ev.no .mark { background: var(--no); transform: scale(1); }
+  .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 16px; padding: 20px; position: sticky; top: 20px; }
+  .round { font-size: 13px; color: var(--muted); }
+  .score { font-size: 44px; font-weight: 800; letter-spacing: -.03em; margin: 2px 0 2px; }
+  .best { font-size: 13px; color: var(--muted); }
+  .btn { width: 100%; margin-top: 16px; border: 0; border-radius: 12px; padding: 14px; background: var(--ink); color: #fff; font: inherit; font-weight: 700; font-size: 15px; cursor: pointer; }
+  .msg { margin-top: 14px; font-size: 14px; line-height: 1.6; min-height: 44px; }
+  .eras { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); display: grid; gap: 6px; font-size: 12.5px; color: var(--muted); }
+  .eras span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: var(--c); margin-right: 8px; vertical-align: -1px; }
+  @media (max-width: 820px) { .layout { grid-template-columns: 1fr; } .panel { position: static; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="../">← 포트폴리오로</a></div>
+  <h1>연표 정렬 게임</h1>
+  <p class="sub">카드를 끌어서 먼저 일어난 사건이 위로 오도록 순서대로 놓습니다.</p>
+  <div class="layout">
+    <div class="board">
+      <div class="axis"><span class="old">오래전</span><span class="new">최근</span></div>
+      <div class="list" id="list"></div>
+    </div>
+    <div class="panel">
+      <div class="round" id="round"></div>
+      <div class="score" id="score">0</div>
+      <div class="best" id="best"></div>
+      <button class="btn" id="btn">순서 확인</button>
+      <div class="msg" id="msg">카드 왼쪽 손잡이가 아니어도 카드 어디든 잡고 끌 수 있습니다.</div>
+      <div class="eras" id="eras"></div>
+    </div>
+  </div>
+</div>
+<script>
+const ERAS = { 고대: '#b9774a', 고려: '#4a8b6f', 조선: '#3b6ea8', 근대: '#8a5aa8', 현대: '#c2483a' };
+const EVENTS = [
+  ['고조선 건국', '단군왕검이 세운 우리 역사 최초의 국가', -2333, '고대'],
+  ['광개토대왕 즉위', '고구려의 영토를 크게 넓힌 왕이 즉위함', 391, '고대'],
+  ['살수대첩', '을지문덕이 수나라 군대를 크게 물리침', 612, '고대'],
+  ['신라의 삼국 통일', '당나라 군대까지 몰아내고 통일을 이룸', 676, '고대'],
+  ['발해 건국', '대조영이 고구려를 이어 세운 나라', 698, '고대'],
+  ['고려 건국', '왕건이 세운 나라', 918, '고려'],
+  ['귀주대첩', '강감찬이 거란군을 크게 물리침', 1019, '고려'],
+  ['팔만대장경 완성', '몽골의 침입을 부처의 힘으로 막고자 새긴 경판', 1251, '고려'],
+  ['위화도 회군', '이성계가 군대를 돌려 권력을 잡음', 1388, '고려'],
+  ['조선 건국', '이성계가 세운 나라', 1392, '조선'],
+  ['훈민정음 반포', '세종이 백성을 위해 만든 글자를 널리 알림', 1446, '조선'],
+  ['임진왜란', '일본의 침략과 이순신의 활약', 1592, '조선'],
+  ['병자호란', '청나라의 침입과 남한산성', 1636, '조선'],
+  ['강화도 조약', '일본과 맺은 불평등 조약', 1876, '근대'],
+  ['갑오개혁', '신분제 폐지 등 근대적 개혁', 1894, '근대'],
+  ['3·1 운동', '전국에서 일어난 독립 만세 운동', 1919, '근대'],
+  ['광복', '일제의 지배에서 벗어남', 1945, '현대'],
+  ['대한민국 정부 수립', '5·10 총선거를 거쳐 정부를 세움', 1948, '현대'],
+  ['6·25 전쟁', '북한의 남침으로 시작된 전쟁', 1950, '현대'],
+  ['4·19 혁명', '부정 선거와 독재에 맞선 민주주의 운동', 1960, '현대'],
+  ['5·18 민주화 운동', '광주 시민들이 민주주의를 지키려 일어섬', 1980, '현대'],
+  ['서울 올림픽', '서울에서 열린 제24회 올림픽', 1988, '현대']
+];
+const ROUNDS = [4, 5, 5, 6, 6];
+const $ = id => document.getElementById(id);
+let round = 0, score = 0, checked = false, used = new Set();
+const best = () => +(localStorage.getItem('timeline-best') || 0);
+const yearText = y => y < 0 ? `기원전 ${-y}년` : `${y}년`;
+
+Object.entries(ERAS).forEach(([k, c]) => $('eras').insertAdjacentHTML('beforeend', `<span style="--c:${c}">${k === '고대' ? '고조선 ~ 남북국' : k === '근대' ? '근대 ~ 일제 강점기' : k}</span>`));
+
+function pick(n) {
+  let pool = EVENTS.filter(e => !used.has(e[0]));
+  if (pool.length < n) { used.clear(); pool = EVENTS.slice(); }
+  const out = [];
+  while (out.length < n) {
+    const e = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+    out.push(e); used.add(e[0]);
+  }
+  // 이미 정답 순서라면 섞기
+  if (out.every((e, i) => !i || out[i - 1][2] < e[2])) out.reverse();
+  return out;
+}
+function startRound() {
+  checked = false;
+  $('list').classList.remove('done');
+  $('list').innerHTML = '';
+  pick(ROUNDS[round]).forEach(e => {
+    const d = document.createElement('div');
+    d.className = 'ev';
+    d.dataset.y = e[2];
+    d.innerHTML = `<span class="grip">⋮⋮</span><div><h3>${e[0]}</h3><p>${e[1]}</p></div><div class="yr">${yearText(e[2])}<small>${e[3] === '고대' ? '고조선 ~ 남북국' : e[3]}</small></div><span class="mark"></span>`;
+    d.addEventListener('pointerdown', startDrag);
+    $('list').appendChild(d);
+  });
+  $('round').textContent = `${round + 1} / ${ROUNDS.length} 라운드 · 카드 ${ROUNDS[round]}장`;
+  $('btn').textContent = '순서 확인';
+  $('msg').textContent = round ? '다음 카드들을 정렬합니다.' : '카드 어디든 잡고 위아래로 끌 수 있습니다.';
+  $('best').textContent = `최고 기록 ${best()}점`;
+}
+
+/* 끌어서 순서 바꾸기 */
+function flip(el, prevTop) {
+  const dy = prevTop - el.getBoundingClientRect().top;
+  if (dy) el.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 220, easing: 'ease-out' });
+}
+function startDrag(e) {
+  if (checked) return;
+  const card = e.currentTarget, list = $('list');
+  card.setPointerCapture(e.pointerId);
+  card.classList.add('drag');
+  let startY = e.clientY;
+  const move = ev => {
+    let dy = ev.clientY - startY;
+    card.style.transform = `translateY(${dy}px) scale(1.02)`;
+    const sibs = [...list.children].filter(c => c !== card);
+    const mid = card.getBoundingClientRect().top + card.offsetHeight / 2;
+    for (const s of sibs) {
+      const r = s.getBoundingClientRect(), c = r.top + r.height / 2;
+      const before = card.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_PRECEDING;
+      if ((before && mid < c) || (!before && mid > c)) {
+        const t0 = card.offsetTop, sTop = r.top;
+        if (before) list.insertBefore(card, s); else list.insertBefore(card, s.nextSibling);
+        startY += card.offsetTop - t0;
+        dy = ev.clientY - startY;
+        card.style.transform = `translateY(${dy}px) scale(1.02)`;
+        flip(s, sTop);
+        break;
+      }
+    }
+  };
+  const up = () => {
+    card.removeEventListener('pointermove', move); card.removeEventListener('pointerup', up); card.removeEventListener('pointercancel', up);
+    card.classList.remove('drag');
+    card.animate([{ transform: card.style.transform }, { transform: 'none' }], { duration: 200, easing: 'ease-out' });
+    card.style.transform = '';
+  };
+  card.addEventListener('pointermove', move); card.addEventListener('pointerup', up); card.addEventListener('pointercancel', up);
+}
+
+/* 확인 */
+function check() {
+  const list = $('list'), cards = [...list.children];
+  const sorted = cards.slice().sort((a, b) => a.dataset.y - b.dataset.y);
+  let right = 0;
+  cards.forEach((c, i) => {
+    const ok = sorted[i] === c;
+    if (ok) right++;
+    c.classList.add(ok ? 'ok' : 'no');
+    c.querySelector('.mark').textContent = ok ? '✓' : '✕';
+    const era = EVENTS.find(e => e[0] === c.querySelector('h3').textContent)[3];
+    c.style.setProperty('--era', ERAS[era]);
+  });
+  list.classList.add('done');
+  checked = true;
+  const gained = right * 10 + (right === cards.length ? 20 : 0);
+  score += gained;
+  $('score').textContent = score;
+  $('msg').innerHTML = right === cards.length ? `<b>모두 맞았습니다!</b> +${gained}점 (완벽 보너스 20점 포함)` : `${cards.length}장 중 <b>${right}장</b>이 제자리였습니다. +${gained}점. 바른 순서로 다시 놓아 보여 드립니다.`;
+  // 잠시 뒤 바른 순서로 이동
+  setTimeout(() => {
+    const tops = new Map(cards.map(c => [c, c.getBoundingClientRect().top]));
+    sorted.forEach(c => list.appendChild(c));
+    cards.forEach(c => { const dy = tops.get(c) - c.getBoundingClientRect().top; if (dy) c.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 600, easing: 'cubic-bezier(.2,.8,.2,1)' }); });
+  }, 900);
+  const last = round === ROUNDS.length - 1;
+  if (last && score > best()) localStorage.setItem('timeline-best', score);
+  $('btn').textContent = last ? `다시 하기 (최종 ${score}점)` : '다음 라운드 →';
+}
+$('btn').onclick = () => {
+  if (!checked) return check();
+  if (round === ROUNDS.length - 1) { round = 0; score = 0; $('score').textContent = 0; }
+  else round++;
+  startRound();
+};
+startRound();
+</script>
+</body>
+</html>

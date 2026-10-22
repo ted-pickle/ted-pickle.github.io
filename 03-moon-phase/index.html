@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>달의 위상</title>
+<meta name="description" content="시점을 바꿔 가며 달의 모양이 바뀌는 이유를 확인하는 3D 시뮬레이션">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<style>
+  :root { --bg: #0d1226; --panel: #151b33; --ink: #eef1fa; --muted: #97a0bd; --line: #262e4d; --sun: #f2b42c; --earth: #58a6ff; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--ink); font-family: "Pretendard Variable", Pretendard, system-ui, sans-serif; word-break: keep-all; }
+  a { color: inherit; }
+  .app { display: grid; grid-template-columns: 1fr 360px; height: 100vh; }
+  .stage { position: relative; overflow: hidden; }
+  #main { width: 100%; height: 100%; display: block; cursor: grab; }
+  #main:active { cursor: grabbing; }
+  .views { position: absolute; left: 20px; bottom: 20px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .views button, .play { border: 1px solid var(--line); background: rgba(21,27,51,.85); color: var(--ink); font: inherit; font-size: 14px; padding: 10px 14px; border-radius: 999px; cursor: pointer; backdrop-filter: blur(6px); }
+  .views button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .top { position: absolute; left: 20px; top: 18px; right: 20px; display: flex; justify-content: space-between; pointer-events: none; }
+  .top a { pointer-events: auto; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .top .drag { font-size: 13px; color: var(--muted); }
+  aside { background: var(--panel); border-left: 1px solid var(--line); padding: 26px 24px; overflow-y: auto; }
+  h1 { margin: 0 0 6px; font-size: 28px; letter-spacing: -.03em; }
+  .sub { margin: 0 0 20px; font-size: 14px; color: var(--muted); line-height: 1.6; }
+  .earthview { position: relative; background: #000; border-radius: 14px; overflow: hidden; aspect-ratio: 1; }
+  #inset { width: 100%; height: 100%; display: block; }
+  .earthview .cap { position: absolute; left: 12px; top: 10px; font-size: 12.5px; color: var(--muted); }
+  .phase { margin: 16px 0 4px; font-size: 26px; font-weight: 800; }
+  .lit { font-size: 13.5px; color: var(--muted); }
+  .why { margin: 12px 0 18px; font-size: 14.5px; line-height: 1.7; }
+  .slider { display: flex; align-items: center; gap: 10px; }
+  .slider input { flex: 1; accent-color: var(--sun); }
+  .day { font-variant-numeric: tabular-nums; font-size: 14px; color: var(--muted); width: 64px; text-align: right; }
+  .strip { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-top: 14px; }
+  .strip button { border: 0; background: none; padding: 4px 0; cursor: pointer; color: var(--muted); font: inherit; font-size: 10.5px; border-radius: 8px; }
+  .strip button.on { background: var(--line); color: var(--ink); }
+  .strip canvas { width: 30px; height: 30px; display: block; margin: 0 auto 4px; }
+  .toggles { margin-top: 18px; display: grid; gap: 8px; font-size: 13.5px; }
+  .toggles label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .sw { display: inline-block; width: 14px; height: 3px; border-radius: 2px; }
+  .key { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13.5px; line-height: 1.7; color: var(--muted); }
+  .key b { color: var(--ink); }
+  .row { display: flex; gap: 8px; margin-top: 12px; }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; height: auto; }
+    .stage { height: 62vh; }
+    aside { border-left: 0; }
+    .earthview { max-width: 320px; margin: 0 auto; }
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div class="app">
+  <div class="stage">
+    <canvas id="main"></canvas>
+    <div class="top"><a href="../">← 포트폴리오로</a><span class="drag">끌어서 돌려 보기 · 휠로 확대</span></div>
+    <div class="views" id="views">
+      <button data-v="top">위에서 보기</button>
+      <button data-v="tilt" class="on">비스듬히 보기</button>
+      <button data-v="side">옆에서 보기</button>
+      <button data-v="earth">지구에서 보기</button>
+    </div>
+  </div>
+  <aside>
+    <h1>달의 위상</h1>
+    <p class="sub">달은 스스로 빛을 내지 않고 햇빛을 반사합니다. 바라보는 위치를 바꿔 가며 모양이 바뀌는 이유를 확인합니다.</p>
+    <div class="earthview"><canvas id="inset"></canvas><span class="cap">지구에서 본 달</span></div>
+    <div class="phase" id="phase"></div>
+    <div class="lit" id="lit"></div>
+    <p class="why" id="why"></p>
+    <div class="slider"><input type="range" id="dayR" min="0" max="29.5" step="0.1" value="7.4"><span class="day" id="dayT"></span></div>
+    <div class="row"><button class="play" id="play">▶ 한 달 재생</button></div>
+    <div class="strip" id="strip"></div>
+    <div class="toggles">
+      <label><input type="checkbox" id="tSun" checked><span class="sw" style="background:var(--sun)"></span> 햇빛을 받는 절반의 경계</label>
+      <label><input type="checkbox" id="tEarth" checked><span class="sw" style="background:var(--earth)"></span> 지구에서 보이는 절반의 경계</label>
+    </div>
+    <div class="key">
+      <b>핵심</b>: 달은 언제나 절반이 햇빛을 받습니다. <b>노란 선</b>은 햇빛 받는 절반, <b>파란 선</b>은 지구에서 보이는 절반의 경계입니다. 두 절반이 겹치는 부분만큼 달이 밝게 보입니다.<br>
+      실제 거리와 크기의 비율은 보기 쉽게 줄였습니다.
+    </div>
+  </aside>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const MONTH = 29.5, R = 10, MOON_R = 1.3, EARTH_R = 2.2;
+const PHASES = [
+  { d: 0, name: '삭', why: '달이 태양과 지구 사이에 있습니다. 햇빛을 받는 면이 지구 반대쪽을 향해 있어서 지구에서는 달이 보이지 않습니다.' },
+  { d: 3.7, name: '초승달', why: '햇빛을 받는 면이 지구 쪽으로 조금 돌아왔습니다. 오른쪽 가장자리만 가늘게 보입니다.' },
+  { d: 7.4, name: '상현달', why: '태양, 지구, 달이 직각을 이룹니다. 밝은 절반 가운데 반만 지구를 향해 오른쪽 반원이 보입니다.' },
+  { d: 11.1, name: '보름으로 가는 달', why: '밝은 면의 대부분이 지구를 향합니다. 왼쪽 일부만 어둡게 남아 있습니다.' },
+  { d: 14.75, name: '보름달 (망)', why: '지구가 태양과 달 사이에 있습니다. 햇빛을 받는 면 전체가 지구를 향해 둥근 달이 보입니다.' },
+  { d: 18.4, name: '하현으로 가는 달', why: '달이 공전하면서 밝은 면이 다시 지구에서 조금씩 멀어집니다. 오른쪽부터 어두워집니다.' },
+  { d: 22.1, name: '하현달', why: '다시 직각을 이룹니다. 이번에는 왼쪽 반원이 보입니다.' },
+  { d: 25.8, name: '그믐달', why: '밝은 면이 거의 지구 반대쪽을 향합니다. 왼쪽 가장자리만 가늘게 보입니다.' }
+];
+
+/* ---------- 장면 ---------- */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#0d1226');
+scene.add(new THREE.AmbientLight(0x8090c0, 0.07));
+const sunLight = new THREE.DirectionalLight(0xffffff, 3.2);
+sunLight.position.set(100, 0, 0);
+scene.add(sunLight);
+
+// 별 배경
+{
+  const g = new THREE.BufferGeometry(), p = [];
+  for (let i = 0; i < 1500; i++) {
+    const v = new THREE.Vector3().randomDirection().multiplyScalar(180 + Math.random() * 60);
+    p.push(v.x, v.y, v.z);
+  }
+  g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: .6, transparent: true, opacity: .7 })));
+}
+// 태양
+const sun = new THREE.Mesh(new THREE.SphereGeometry(3, 48, 32), new THREE.MeshBasicMaterial({ color: 0xffd36b }));
+sun.position.set(30, 0, 0);
+scene.add(sun);
+const glowTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const x = c.getContext('2d'), g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, 'rgba(255,210,110,.9)'); g.addColorStop(.35, 'rgba(255,180,60,.35)'); g.addColorStop(1, 'rgba(255,160,40,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+})();
+const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, depthWrite: false, transparent: true }));
+glow.scale.set(18, 18, 1); glow.position.copy(sun.position);
+scene.add(glow);
+// 햇빛 (평행한 빛줄기)
+const rays = new THREE.Group();
+for (let z = -12; z <= 12; z += 4) {
+  for (const y of [-3, 3]) {
+    const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(25, y, z), new THREE.Vector3(-14, y, z)]);
+    rays.add(new THREE.Line(g, new THREE.LineDashedMaterial({ color: 0xffc85a, transparent: true, opacity: .22, dashSize: 1, gapSize: .7 })));
+  }
+}
+rays.children.forEach(l => l.computeLineDistances());
+scene.add(rays);
+// 지구
+const earthTex = (() => {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+  const x = c.getContext('2d');
+  x.fillStyle = '#2c6fd6'; x.fillRect(0, 0, 512, 256);
+  x.fillStyle = '#4fae5a';
+  const blobs = [[80, 90, 50, 40], [140, 150, 30, 50], [270, 80, 70, 35], [300, 150, 40, 45], [420, 110, 55, 30], [440, 190, 30, 20]];
+  blobs.forEach(([cx, cy, rx, ry]) => { x.beginPath(); x.ellipse(cx, cy, rx, ry, .4, 0, 7); x.fill(); });
+  x.fillStyle = '#eef3ff'; x.fillRect(0, 0, 512, 14); x.fillRect(0, 242, 512, 14);
+  return new THREE.CanvasTexture(c);
+})();
+const earth = new THREE.Mesh(new THREE.SphereGeometry(EARTH_R, 64, 48), new THREE.MeshStandardMaterial({ map: earthTex, roughness: .9 }));
+scene.add(earth);
+// 달 궤도
+{
+  const pts = [];
+  for (let i = 0; i <= 128; i++) { const a = i / 128 * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * R, 0, -Math.sin(a) * R)); }
+  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color: 0x8a94c0, dashSize: .5, gapSize: .4, transparent: true, opacity: .5 }));
+  l.computeLineDistances(); scene.add(l);
+}
+// 달
+const moonTex = (() => {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+  const x = c.getContext('2d');
+  x.fillStyle = '#c9c6bd'; x.fillRect(0, 0, 512, 256);
+  for (let i = 0; i < 140; i++) {
+    x.fillStyle = `rgba(${Math.random() < .5 ? '90,88,84' : '235,232,225'},${.08 + Math.random() * .18})`;
+    x.beginPath(); x.arc(Math.random() * 512, Math.random() * 256, 3 + Math.random() * 22, 0, 7); x.fill();
+  }
+  return new THREE.CanvasTexture(c);
+})();
+const moon = new THREE.Mesh(new THREE.SphereGeometry(MOON_R, 64, 48), new THREE.MeshStandardMaterial({ map: moonTex, roughness: 1 }));
+scene.add(moon);
+// 경계 고리 (레이어 1: 큰 화면에서만 보임)
+const ringGeo = new THREE.TorusGeometry(MOON_R * 1.03, .045, 12, 96);
+const sunRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xf2b42c }));
+const earthRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0x58a6ff }));
+sunRing.layers.set(1); earthRing.layers.set(1);
+scene.add(sunRing, earthRing);
+// 이름표
+function label(text, color) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 64;
+  const x = c.getContext('2d');
+  x.font = '600 34px Pretendard, system-ui, sans-serif'; x.fillStyle = color; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(text, 128, 32);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
+  s.scale.set(4, 1, 1); s.layers.set(1);
+  scene.add(s); return s;
+}
+const sunLab = label('태양', '#ffd36b'); sunLab.position.set(30, 5, 0);
+const earthLab = label('지구', '#9cc8ff'); earthLab.position.set(0, -3.4, 0);
+const moonLab = label('달', '#e6e3dc');
+
+/* ---------- 카메라와 렌더러 ---------- */
+const mainCanvas = document.getElementById('main');
+const renderer = new THREE.WebGLRenderer({ canvas: mainCanvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const camera = new THREE.PerspectiveCamera(45, 1, .1, 1000);
+camera.layers.enable(1);
+const controls = new OrbitControls(camera, mainCanvas);
+controls.enableDamping = true; controls.minDistance = 8; controls.maxDistance = 120;
+
+const insetCanvas = document.getElementById('inset');
+const insetRenderer = new THREE.WebGLRenderer({ canvas: insetCanvas, antialias: true });
+insetRenderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const eyeCam = new THREE.PerspectiveCamera(30, 1, .1, 1000);   // 지구 표면의 관찰자 (북반구, 위쪽 = 북쪽)
+
+const VIEWS = {
+  top: { pos: [6, 52, .01], target: [6, 0, 0] },
+  tilt: { pos: [-14, 20, 24], target: [4, 0, 0] },
+  side: { pos: [4, 2, 34], target: [4, 0, 0] }
+};
+let view = 'tilt', anim = null;
+function setView(v) {
+  view = v;
+  document.querySelectorAll('#views button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  controls.enabled = v !== 'earth';
+  if (v === 'earth') return;
+  const to = VIEWS[v];
+  anim = { t: 0, fromP: camera.position.clone(), fromT: controls.target.clone(), toP: new THREE.Vector3(...to.pos), toT: new THREE.Vector3(...to.target) };
+}
+document.querySelectorAll('#views button').forEach(b => b.onclick = () => setView(b.dataset.v));
+camera.position.set(...VIEWS.tilt.pos); controls.target.set(...VIEWS.tilt.target);
+
+/* ---------- 날짜에 따라 배치 ---------- */
+let day = 7.4, playing = false;
+const dayR = document.getElementById('dayR');
+function place() {
+  const th = day / MONTH * Math.PI * 2;
+  const m = new THREE.Vector3(Math.cos(th) * R, 0, -Math.sin(th) * R);   // 위에서 볼 때 시계 반대 방향으로 공전
+  moon.position.copy(m);
+  moonLab.position.set(m.x, 2.3, m.z);
+  // 노란 고리: 햇빛 방향(+x)에 수직  /  파란 고리: 지구 방향에 수직
+  sunRing.position.copy(m); sunRing.lookAt(m.clone().add(new THREE.Vector3(1, 0, 0)));
+  earthRing.position.copy(m); earthRing.lookAt(new THREE.Vector3(0, 0, 0));
+  const dir = m.clone().normalize();
+  eyeCam.position.copy(dir.clone().multiplyScalar(EARTH_R * 1.02));
+  eyeCam.up.set(0, 1, 0); eyeCam.lookAt(m);
+  // 문구
+  const idx = Math.round(day / MONTH * 8) % 8;
+  const ph = PHASES[idx];
+  document.getElementById('phase').textContent = ph.name;
+  document.getElementById('why').textContent = ph.why;
+  const lit = Math.round((1 - Math.cos(th)) / 2 * 100);
+  document.getElementById('lit').textContent = `지구에서 보이는 밝은 부분: 약 ${lit}%`;
+  document.getElementById('dayT').textContent = `${day.toFixed(1)}일째`;
+  document.querySelectorAll('#strip button').forEach((b, i) => b.classList.toggle('on', i === idx));
+  dayR.value = day;
+}
+dayR.oninput = () => { day = +dayR.value; playing = false; playBtn.textContent = '▶ 한 달 재생'; place(); };
+const playBtn = document.getElementById('play');
+playBtn.onclick = () => { playing = !playing; playBtn.textContent = playing ? '❚❚ 멈춤' : '▶ 한 달 재생'; };
+document.getElementById('tSun').onchange = e => sunRing.visible = e.target.checked;
+document.getElementById('tEarth').onchange = e => earthRing.visible = e.target.checked;
+
+// 위상 띠 (작은 달 그림)
+function drawPhaseIcon(cv, th) {
+  const x = cv.getContext('2d'), s = cv.width, r = s / 2 - 2, c = s / 2;
+  x.clearRect(0, 0, s, s);
+  x.fillStyle = '#2a3150'; x.beginPath(); x.arc(c, c, r, 0, 7); x.fill();
+  const waxing = th <= Math.PI, k = Math.cos(th);
+  x.fillStyle = '#e8e4d8';
+  x.beginPath(); x.arc(c, c, r, -Math.PI / 2, Math.PI / 2, !waxing); x.closePath(); x.fill();   // 밝은 반쪽
+  x.fillStyle = k > 0 ? '#2a3150' : '#e8e4d8';
+  x.beginPath(); x.ellipse(c, c, Math.abs(k) * r, r, 0, 0, 7); x.fill();                      // 초승/그믐은 가리고, 볼록한 달은 채움
+}
+const strip = document.getElementById('strip');
+PHASES.forEach(p => {
+  const b = document.createElement('button');
+  const cv = document.createElement('canvas'); cv.width = cv.height = 60;
+  drawPhaseIcon(cv, p.d / MONTH * Math.PI * 2);
+  b.appendChild(cv); b.append(p.name.replace(' (망)', '').replace('으로 가는 달', ' 전'));
+  b.onclick = () => { day = p.d; playing = false; playBtn.textContent = '▶ 한 달 재생'; place(); };
+  strip.appendChild(b);
+});
+
+/* ---------- 그리기 ---------- */
+function resize() {
+  const w = mainCanvas.clientWidth, h = mainCanvas.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  const s = insetCanvas.clientWidth;
+  insetRenderer.setSize(s, s, false);
+}
+addEventListener('resize', resize);
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (playing) { day = (day + dt * 2.2) % MONTH; place(); }
+  if (anim) {
+    anim.t = Math.min(1, anim.t + dt / .9);
+    const e = 1 - Math.pow(1 - anim.t, 3);
+    camera.position.lerpVectors(anim.fromP, anim.toP, e);
+    controls.target.lerpVectors(anim.fromT, anim.toT, e);
+    if (anim.t === 1) anim = null;
+  }
+  if (view === 'earth') {
+    // 큰 화면도 지구 위 관찰자 시점으로 (조금 넓게)
+    camera.position.copy(eyeCam.position);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(moon.position);
+    camera.fov = 42; camera.updateProjectionMatrix();
+  } else {
+    if (camera.fov !== 45) { camera.fov = 45; camera.updateProjectionMatrix(); }
+    controls.update();
+  }
+  earth.rotation.y += dt * .2;
+  renderer.render(scene, camera);
+  insetRenderer.render(scene, eyeCam);
+  requestAnimationFrame(loop);
+}
+resize(); place(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>

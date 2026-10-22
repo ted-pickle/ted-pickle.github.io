@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>일차함수 놀이터</title>
+<meta name="description" content="기울기와 y절편을 맞춰 직선 하나로 모든 별을 통과시키는 게임">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<style>
+  :root { --bg: #f7f9ff; --ink: #1f2a44; --muted: #6b7690; --line: #e1e6f2; --accent: #2f6fdf; --star: #f2b42c; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Pretendard Variable", Pretendard, system-ui, sans-serif; word-break: keep-all; }
+  a { color: inherit; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 28px 24px 60px; }
+  .top a { font-size: 14px; color: var(--muted); text-decoration: none; }
+  h1 { margin: 18px 0 6px; font-size: 34px; letter-spacing: -.03em; }
+  .sub { margin: 0 0 24px; color: var(--muted); }
+  .layout { display: grid; grid-template-columns: 1fr 340px; gap: 26px; align-items: start; }
+  .board { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 12px; }
+  svg { width: 100%; display: block; }
+  .panel { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+  .panel + .panel { margin-top: 14px; }
+  .lv { display: flex; justify-content: space-between; font-size: 14px; color: var(--muted); }
+  .lv b { color: var(--ink); }
+  .eq { margin: 16px 0 18px; font-size: 30px; font-weight: 800; letter-spacing: -.02em; text-align: center; font-family: "Pretendard Variable", serif; }
+  .eq .a { color: var(--accent); } .eq .b { color: #d2543a; }
+  .ctrl { display: grid; grid-template-columns: 74px 1fr; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 14px; }
+  .step { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; background: var(--bg); border-radius: 10px; overflow: hidden; }
+  .step button { height: 44px; border: 0; background: none; font: inherit; font-size: 22px; color: var(--ink); cursor: pointer; }
+  .step button:hover { background: #e8eefb; }
+  .step span { text-align: center; font-weight: 700; font-size: 18px; }
+  .fire { width: 100%; margin-top: 8px; border: 0; border-radius: 12px; padding: 15px; background: var(--accent); color: #fff; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; transition: transform .15s; }
+  .fire:active { transform: scale(.98); }
+  .fire:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 8px; margin-top: 8px; }
+  .row button { flex: 1; border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 10px; font: inherit; font-size: 14px; color: var(--ink); cursor: pointer; }
+  .msg { min-height: 48px; margin-top: 14px; font-size: 14.5px; line-height: 1.6; }
+  .msg.good { color: #1f8a5b; font-weight: 600; }
+  .msg.bad { color: #c2482e; }
+  .note h3 { margin: 0 0 8px; font-size: 15px; }
+  .note p { margin: 0 0 8px; font-size: 14px; line-height: 1.7; color: var(--muted); }
+  .note b { color: var(--ink); }
+  .stars { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .pop { animation: pop .6s ease; transform-box: fill-box; transform-origin: center; }
+  @keyframes pop { 40% { transform: scale(1.7); } }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="../">← 포트폴리오로</a></div>
+  <h1>일차함수 놀이터</h1>
+  <p class="sub">기울기와 y절편을 정해서 직선 하나로 모든 별을 통과시킵니다.</p>
+  <div class="layout">
+    <div class="board"><svg id="svg" viewBox="-8.6 -8.6 17.2 17.2"></svg></div>
+    <div>
+      <div class="panel">
+        <div class="lv"><span>단계 <b id="lv"></b> / <span id="lvmax"></span></span><span>시도 <b id="tries">0</b>번</span></div>
+        <div class="eq" id="eq"></div>
+        <div class="ctrl"><span>기울기 <b style="color:var(--accent)">a</b></span>
+          <div class="step"><button data-k="a" data-d="-1">−</button><span id="av"></span><button data-k="a" data-d="1">+</button></div></div>
+        <div class="ctrl"><span>y절편 <b style="color:#d2543a">b</b></span>
+          <div class="step"><button data-k="b" data-d="-1">−</button><span id="bv"></span><button data-k="b" data-d="1">+</button></div></div>
+        <button class="fire" id="fire">직선 발사</button>
+        <div class="row"><button id="hint">힌트 보기</button><button id="next" disabled>다음 단계 →</button></div>
+        <div class="msg" id="msg"></div>
+        <div class="stars" id="total"></div>
+      </div>
+      <div class="panel note">
+        <h3>y = ax + b 읽는 법</h3>
+        <p><b>기울기 a</b>는 x가 1만큼 오른쪽으로 갈 때 y가 얼마나 올라가는지입니다. 두 별 사이의 <b>(y의 증가량) ÷ (x의 증가량)</b>으로 구합니다.</p>
+        <p><b>y절편 b</b>는 직선이 y축과 만나는 높이입니다. x = 0일 때의 y값입니다.</p>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+// 각 단계의 별 (모두 한 직선 위에 있습니다)
+const LEVELS = [
+  [[0, 2], [2, 4], [-3, -1]],
+  [[0, -1], [2, 3], [-2, -5]],
+  [[1, 2], [4, -1], [-2, 5]],
+  [[2, 2], [-4, -1], [6, 4]],
+  [[-1, -2], [-3, 2], [1, -6]],
+  [[2, 4], [6, 2], [-4, 7]],
+  [[1, 3], [-2, -6], [2, 6], [-1, -3]],
+  [[2, -2], [-2, 4], [4, -5]]
+];
+const A_STEPS = [];                          // 기울기는 1/2 단위로 -4 ~ 4
+for (let v = -8; v <= 8; v++) A_STEPS.push(v / 2);
+const NS = 'http://www.w3.org/2000/svg';
+const $ = id => document.getElementById(id);
+let level = 0, ai = A_STEPS.indexOf(1), b = 0, tries = 0, solved = false, busy = false, results = [];
+
+const frac = v => {
+  if (Number.isInteger(v)) return String(v);
+  const n = v * 2;
+  return (n < 0 ? '−' : '') + Math.abs(n) + '/2';
+};
+function eqHTML() {
+  const a = A_STEPS[ai];
+  let s = 'y = ';
+  if (a === 0) s += '';
+  else if (a === 1) s += '<span class="a">x</span>';
+  else if (a === -1) s += '<span class="a">−x</span>';
+  else s += `<span class="a">${frac(a)}x</span>`;
+  if (a === 0) s += `<span class="b">${b < 0 ? '−' + -b : b}</span>`;
+  else if (b > 0) s += ` + <span class="b">${b}</span>`;
+  else if (b < 0) s += ` − <span class="b">${-b}</span>`;
+  return s;
+}
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  (parent || $('svg')).appendChild(e);
+  return e;
+}
+function drawGrid() {
+  const svg = $('svg');
+  svg.innerHTML = '';
+  // 수학 좌표: y가 위로 커지도록 뒤집은 그룹
+  const g = el('g', { id: 'world', transform: 'scale(1,-1)' });
+  for (let i = -8; i <= 8; i++) {
+    el('line', { x1: i, y1: -8, x2: i, y2: 8, stroke: i ? '#e7ecf6' : '#7a86a3', 'stroke-width': i ? .03 : .05 }, g);
+    el('line', { x1: -8, y1: i, x2: 8, y2: i, stroke: i ? '#e7ecf6' : '#7a86a3', 'stroke-width': i ? .03 : .05 }, g);
+  }
+  for (let i = -8; i <= 8; i += 2) {
+    if (!i) continue;
+    const t1 = el('text', { x: i, y: .55, 'font-size': .42, 'text-anchor': 'middle', fill: '#8a94ab' }); t1.textContent = i;
+    const t2 = el('text', { x: -.25, y: -i + .15, 'font-size': .42, 'text-anchor': 'end', fill: '#8a94ab' }); t2.textContent = i;
+  }
+  const o = el('text', { x: -.25, y: .55, 'font-size': .42, 'text-anchor': 'end', fill: '#8a94ab' }); o.textContent = 'O';
+  const defs = el('defs', {});
+  const cp = el('clipPath', { id: 'clip' }, defs);
+  el('rect', { x: -8, y: -8, width: 16, height: 16 }, cp);
+  el('g', { id: 'hintg', transform: 'scale(1,-1)' });
+  el('line', { id: 'beam', stroke: '#2f6fdf', 'stroke-width': .09, 'stroke-linecap': 'round', transform: 'scale(1,-1)', 'clip-path': 'url(#clip)' });
+  el('circle', { id: 'yint', r: .16, fill: '#d2543a', opacity: 0, transform: 'scale(1,-1)' });
+  const sg = el('g', { id: 'starsg' });
+  LEVELS[level].forEach(([x, y], i) => {
+    const s = el('path', { d: starPath(x, -y, .42, .18), fill: '#fff', stroke: '#f2b42c', 'stroke-width': .07, id: 'st' + i }, sg);
+    const lab = el('text', { x: x + .45, y: -y - .35, 'font-size': .36, fill: '#5d6883', stroke: '#fff', 'stroke-width': .12, 'paint-order': 'stroke' }, sg); lab.textContent = `(${x}, ${y})`;
+  });
+}
+function starPath(cx, cy, R, r) {
+  let d = '';
+  for (let i = 0; i < 10; i++) {
+    const rad = i % 2 ? r : R, a = -Math.PI / 2 + i * Math.PI / 5;
+    d += (i ? 'L' : 'M') + (cx + Math.cos(a) * rad).toFixed(3) + ' ' + (cy + Math.sin(a) * rad).toFixed(3);
+  }
+  return d + 'Z';
+}
+function updateUI() {
+  $('eq').innerHTML = eqHTML();
+  $('av').textContent = frac(A_STEPS[ai]);
+  $('bv').textContent = b;
+  $('lv').textContent = level + 1;
+  $('lvmax').textContent = LEVELS.length;
+  $('tries').textContent = tries;
+}
+function fire() {
+  if (busy || solved) return;
+  busy = true; tries++; updateUI();
+  const a = A_STEPS[ai];
+  const beam = $('beam');
+  beam.setAttribute('x1', -8.6); beam.setAttribute('y1', a * -8.6 + b);
+  beam.setAttribute('x2', 8.6); beam.setAttribute('y2', a * 8.6 + b);
+  const len = Math.hypot(17.2, a * 17.2);
+  beam.style.transition = 'none';
+  beam.style.strokeDasharray = len; beam.style.strokeDashoffset = len;
+  beam.getBoundingClientRect();
+  beam.style.transition = 'stroke-dashoffset 1s ease-out';
+  beam.style.strokeDashoffset = 0;
+  const yi = $('yint'); yi.setAttribute('cx', 0); yi.setAttribute('cy', b); yi.setAttribute('opacity', 1);
+  let hit = 0;
+  LEVELS[level].forEach(([x, y], i) => {
+    const s = $('st' + i);
+    const on = a * x + b === y;
+    setTimeout(() => {
+      s.setAttribute('fill', on ? '#f2b42c' : '#fff');
+      if (on) { s.classList.remove('pop'); s.getBoundingClientRect(); s.classList.add('pop'); }
+    }, 1000 * (x + 8.6) / 17.2);
+    if (on) hit++;
+  });
+  setTimeout(() => {
+    busy = false;
+    const total = LEVELS[level].length;
+    if (hit === total) {
+      solved = true;
+      const grade = tries === 1 ? '★★★' : tries <= 3 ? '★★' : '★';
+      results[level] = grade;
+      $('msg').className = 'msg good';
+      $('msg').textContent = `성공! 별 ${total}개를 모두 통과했습니다. ${grade}`;
+      $('next').disabled = false;
+      $('next').textContent = level === LEVELS.length - 1 ? '처음부터 다시' : '다음 단계 →';
+      $('total').textContent = '기록: ' + results.map((r, i) => `${i + 1}단계 ${r || '-'}`).join('  ');
+    } else {
+      $('msg').className = 'msg bad';
+      $('msg').textContent = hit ? `별 ${total}개 중 ${hit}개를 통과했습니다. 기울기나 y절편을 다시 살펴봅니다.` : '하나도 맞지 않았습니다. 두 별 사이에서 기울기를 먼저 구해 봅니다.';
+    }
+  }, 1050);
+}
+function showHint() {
+  const pts = LEVELS[level].slice().sort((p, q) => p[0] - q[0]);
+  const [p, q] = [pts[0], pts[1]];
+  const g = $('hintg'); g.innerHTML = '';
+  el('path', { d: `M${p[0]} ${p[1]} L${q[0]} ${p[1]} L${q[0]} ${q[1]}`, fill: 'none', stroke: '#d2543a', 'stroke-width': .06, 'stroke-dasharray': '.2 .15' }, g);
+  const dx = q[0] - p[0], dy = q[1] - p[1];
+  $('msg').className = 'msg';
+  $('msg').innerHTML = `(${p[0]}, ${p[1]})에서 (${q[0]}, ${q[1]})까지 x는 <b>${dx}</b>, y는 <b>${dy}</b>만큼 변합니다. 기울기는 ${dy} ÷ ${dx} 입니다.`;
+}
+function loadLevel(i) {
+  level = i; tries = 0; solved = false;
+  $('next').disabled = true; $('msg').textContent = ''; $('msg').className = 'msg';
+  drawGrid(); updateUI();
+}
+document.querySelectorAll('.step button').forEach(btn => btn.onclick = () => {
+  if (solved) return;
+  const d = +btn.dataset.d;
+  if (btn.dataset.k === 'a') ai = Math.max(0, Math.min(A_STEPS.length - 1, ai + d));
+  else b = Math.max(-8, Math.min(8, b + d));
+  updateUI();
+});
+$('fire').onclick = fire;
+$('hint').onclick = showHint;
+$('next').onclick = () => loadLevel((level + 1) % LEVELS.length);
+addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.code === 'Space') { e.preventDefault(); fire(); }
+});
+loadLevel(0);
+</script>
+</body>
+</html>
